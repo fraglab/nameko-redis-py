@@ -6,12 +6,12 @@ Redis dependency and utils for Nameko
 
 Install
 ```bash
-pip3 install nameko-redis-utils
+pip3 install nameko-redis-py
 ```
 
 Install latest version from Git:
 ```bash
-pip install git+https://github.com/fraglab/nameko-redis-utils.git
+pip install git+https://github.com/fraglab/nameko-redis-py.git
 ```
 
 # Usage
