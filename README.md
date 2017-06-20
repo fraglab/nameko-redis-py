@@ -64,7 +64,7 @@ class MyDependencyProvider(DependencyProvider):
 
 ### PubSub Response Listener
 
-Problem: Waiting for key or value attribute in Redis without blocking connection
+Problem: Waiting for key or value attribute in Redis without blocking connection <br>
 Solution: Use single pubsub connection for waiting keys
 
 ```python
