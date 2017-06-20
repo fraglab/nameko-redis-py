@@ -22,7 +22,7 @@ pip install git+https://github.com/fraglab/nameko-redis-utils.git
 from redis import StrictRedis
 from nameko.rpc import rpc
 from nameko.extensions import DependencyProvider
-from nameko_redis_utils import Redis, SharedRedis
+from nameko_redis import Redis, SharedRedis
 
 
 class MyService:
@@ -72,7 +72,7 @@ import json
 from typing import Optional
 
 from nameko.rpc import rpc
-from nameko_redis_utils.pubsub_response_listener import PubSubResponsesListener
+from nameko_redis.pubsub_response_listener import PubSubResponsesListener
 
 
 # Must return tuple with response_key and deserialized object 
@@ -130,11 +130,10 @@ Redis, SharedRedis arguments:
 
 
 ```python
-from nameko_redis_utils import Redis
+from nameko_redis import Redis
 
 class MyService:
     name = "my_service"
 
     redis = Redis('default', retry_on_timeout=True, encoding='utf-8')  # type: StrictRedis
-
 ```
