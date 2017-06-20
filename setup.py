@@ -1,16 +1,16 @@
 from setuptools import setup, find_packages
 
-from nameko_redis_utils import __version__
+from nameko_redis import __version__
 
 
 setup(
-    name='nameko-redis-utils',
+    name='nameko-redis-py',
     version=__version__,
     author='Sergey Suglobov',
     author_email='s.suglobov@gmail.com',
     packages=find_packages(),
     keywords="nameko, redis, redis-utils",
-    url='https://github.com/fraglab/nameko-redis-utils',
+    url='https://github.com/fraglab/nameko-redis-py',
     description='Redis dependency and utils for Nameko',
     classifiers=[
         'Environment :: Console',

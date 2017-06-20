@@ -8,7 +8,7 @@ from nameko.exceptions import deserialize_to_instance
 from eventlet.event import Event
 import eventlet
 
-from nameko_redis_utils.client_providers import SharedRedis
+from nameko_redis.client_providers import SharedRedis
 
 __all__ = ['PubSubResponsesListener', 'MessageData', 'WaitTimeout', 'KeyNotFound']
 
