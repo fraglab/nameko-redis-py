@@ -125,7 +125,7 @@ class PubSubResponsesListener(DependencyProvider):
                     self._responses[message_id].event.wait()
 
             return self._responses[message_id].data
-        except eventlet.TimeoutError:
+        except (eventlet.TimeoutError, eventlet.Timeout):
             logger.info("Response timeout", extra=log_extra)
             raise WaitTimeout("Timeout error")
         finally:
