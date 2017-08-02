@@ -66,7 +66,7 @@ class PubSubResponsesListener(DependencyProvider):
 
     def _listener(self):
         try:
-            logger.info("PubSub Responses Listener", extra={'state': 'UP'})
+            logger.debug("PubSub Responses Listener", extra={'state': 'UP'})
             while not self._stop_listen:
                 if self._pubsub.subscribed:
                     message = self._pubsub.get_message(timeout=0.2)
@@ -109,11 +109,8 @@ class PubSubResponsesListener(DependencyProvider):
         self._redis = None
         super(PubSubResponsesListener, self).stop()
 
-    def wait_for_response(self, response_key: str, timeout: int, wait_not_exists_key: bool=True, log_extra: dict=None):
-        if not log_extra:
-            log_extra = {}
-
-        logger.info("Waiting for response", extra=log_extra)
+    def wait_for_response(self, response_key: str, timeout: int, wait_not_exists_key: bool=True):
+        logger.debug("Waiting for response", extra={'response_key': response_key})
         message_id = uuid4()
 
         try:
@@ -126,7 +123,7 @@ class PubSubResponsesListener(DependencyProvider):
 
             return self._responses[message_id].data
         except (eventlet.TimeoutError, eventlet.Timeout):
-            logger.info("Response timeout", extra=log_extra)
+            logger.error("Response timeout", extra={'response_key': response_key, 'timeout': timeout})
             raise WaitTimeout("Timeout error")
         finally:
             self._pubsub.unsubscribe(response_key)
@@ -138,7 +135,7 @@ class PubSubResponsesListener(DependencyProvider):
             return self._update_data(response_raw)
 
         if wait_not_exists_key is False:
-            raise KeyNotFound("Waiting for not exists key: %s" % response_key)
+            raise KeyNotFound("Waiting for not exists key", extra={'response_key': response_key})
 
     def get_dependency(self, worker_ctx):
 
