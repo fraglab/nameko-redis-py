@@ -31,7 +31,9 @@ class SharedRedis(ProviderCollector, SharedExtension):
 
 
 class Redis(DependencyProvider):
-    shared_redis = SharedRedis()
+
+    def __init__(self, uri_key='default', **redis_opts):
+        self.shared_redis = SharedRedis(uri_key, **redis_opts)
 
     def setup(self):
         self.shared_redis.register_provider(self)
