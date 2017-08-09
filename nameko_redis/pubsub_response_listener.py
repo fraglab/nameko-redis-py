@@ -1,4 +1,3 @@
-from traceback import format_exc
 from logging import getLogger
 from typing import Dict
 from uuid import uuid4
@@ -78,8 +77,7 @@ class PubSubResponsesListener(DependencyProvider):
 
                 eventlet.sleep(1.0)
         except Exception as error:
-            logger.error("PubSub Responses Listener", extra={
-                'state': 'DOWN', 'error': str(error), 'traceback': format_exc()})
+            logger.exception("PubSub Responses Listener", extra={'state': 'DOWN', 'error': str(error)})
         finally:
             self._stop_listen = True
 
@@ -93,7 +91,7 @@ class PubSubResponsesListener(DependencyProvider):
 
                 log_extra = dict(response_key=response_key, message_data=vars(deserialized_obj))
                 if self.event_validation(deserialized_obj):
-                    logger.info('Message event send', extra=log_extra)
+                    logger.debug('Message event was sent', extra=log_extra)
                     message.event.send()
                     data_updated = True
                 else:
@@ -137,10 +135,25 @@ class PubSubResponsesListener(DependencyProvider):
         if wait_not_exists_key is False:
             raise KeyNotFound("Waiting for not exists key", extra={'response_key': response_key})
 
+    def publish_response(self, channel, message, max_retries=3, retry_timeout_sec=1):
+        retry = 0
+        while retry >= max_retries:
+            subscribers = self._redis.publish(channel, message)
+            if subscribers:
+                logger.debug('Response delivered successful', extra={
+                    'channel': channel, 'retry': retry, 'subscribers': subscribers})
+                return True
+
+            retry += 1
+            eventlet.sleep(retry_timeout_sec)
+
+        logger.debug('Response was not delivered', extra={'channel': channel})
+
     def get_dependency(self, worker_ctx):
 
         class Api:
             wait_for_response = self.wait_for_response
+            publish_response = self.publish_response
             is_healthy = self.is_healthy
 
         return Api()
