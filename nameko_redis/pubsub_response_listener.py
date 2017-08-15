@@ -137,7 +137,7 @@ class PubSubResponsesListener(DependencyProvider):
 
     def publish_response(self, channel, message, max_retries=3, retry_timeout_sec=1):
         retry = 0
-        while retry >= max_retries:
+        while retry <= max_retries:
             subscribers = self._redis.publish(channel, message)
             if subscribers:
                 logger.debug('Response delivered successful', extra={
@@ -150,10 +150,4 @@ class PubSubResponsesListener(DependencyProvider):
         logger.debug('Response was not delivered', extra={'channel': channel})
 
     def get_dependency(self, worker_ctx):
-
-        class Api:
-            wait_for_response = self.wait_for_response
-            publish_response = self.publish_response
-            is_healthy = self.is_healthy
-
-        return Api()
+        return self
