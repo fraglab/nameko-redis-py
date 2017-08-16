@@ -133,7 +133,7 @@ class PubSubResponsesListener(DependencyProvider):
             return self._update_data(response_raw)
 
         if wait_not_exists_key is False:
-            raise KeyNotFound("Waiting for not exists key", extra={'response_key': response_key})
+            raise KeyNotFound("Waiting for not exists key")
 
     def publish_response(self, channel, message, max_retries=3, retry_timeout_sec=1):
         retry = 0
