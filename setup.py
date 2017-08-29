@@ -26,6 +26,6 @@ setup(
     install_requires=[
         'setuptools',
         'nameko',
-        'redis',
+        'redis'
     ]
 )

@@ -1,17 +1,20 @@
 from logging import getLogger
-from typing import Dict
+from typing import Dict, NewType
 from uuid import uuid4
 
-from nameko.extensions import DependencyProvider
-from nameko.exceptions import deserialize_to_instance
-from eventlet.event import Event
 import eventlet
+from eventlet.event import Event
+from redis.client import StrictRedis, PubSub
+from nameko.extensions import DependencyProvider, SharedExtension, ProviderCollector
+from nameko.exceptions import deserialize_to_instance
 
 from nameko_redis.client_providers import SharedRedis
 
-__all__ = ['PubSubResponsesListener', 'MessageData', 'WaitTimeout', 'KeyNotFound']
+__all__ = ['PubSubResponsesListener', 'SharedResponsesListener', 'IResponsesListener',
+           'MessageData', 'WaitTimeout', 'KeyNotFound']
 
 logger = getLogger(__name__)
+MessageID = NewType('MessageID', str)
 
 
 @deserialize_to_instance
@@ -36,39 +39,51 @@ class MessageData:
         self.data = None
 
 
-class PubSubResponsesListener(DependencyProvider):
-    shared_redis = SharedRedis(retry_on_timeout=True)
+class IResponsesListener:
 
-    def __init__(self, deserializer, event_validation=lambda deserialized_obj: True):
-        super(PubSubResponsesListener, self).__init__()
+    def is_healthy(self):
+        raise NotImplementedError()
+
+    def wait_for_response(self, response_key: str, timeout: int, wait_not_exists_key: bool=True):
+        raise NotImplementedError()
+
+    def publish_response(self, channel: str, message: str, max_retries: int=3, retry_timeout_sec: int=1):
+        raise NotImplementedError()
+
+
+class SharedResponsesListener(ProviderCollector, SharedExtension, IResponsesListener):
+
+    def __init__(self,
+                 deserializer=lambda raw_data: ('', None),
+                 event_validation=lambda deserialized_obj: True,
+                 uri_key='default', **redis_opts):
+        super(SharedResponsesListener, self).__init__()
 
         self.deserializer = deserializer
         self.event_validation = event_validation
 
-        self._redis = None
-        self._pubsub = None
-        self._stop_listen = False
+        redis_kwargs = {'retry_on_timeout': True}
+        redis_kwargs.update(redis_opts)
 
-        self._responses = {}  # type: Dict['str', MessageData]
+        self.shared_redis = SharedRedis(uri_key, **redis_kwargs)
+        self.redis = None  # type: StrictRedis
+        self.pubsub = None  # type: PubSub
 
-    def is_healthy(self) -> bool:
-        return not self._stop_listen
-
-    def setup(self):
-        self.shared_redis.register_provider(self)
+        self._responses = {}  # type: Dict[MessageID, MessageData]
+        self._stop_listen = Event()
 
     def start(self):
         self.shared_redis.start()
-        self._redis = self.shared_redis.get_client()
-        self._pubsub = self._redis.pubsub(ignore_subscribe_messages=True)
+        self.redis = self.shared_redis.get_client()
+        self.pubsub = self.redis.pubsub(ignore_subscribe_messages=True)
         self.container.spawn_managed_thread(self._listener)
 
     def _listener(self):
         try:
-            logger.debug("PubSub Responses Listener", extra={'state': 'UP'})
-            while not self._stop_listen:
-                if self._pubsub.subscribed:
-                    message = self._pubsub.get_message(timeout=0.2)
+            logger.debug("PubSub Responses Listener is starting", extra={'state': 'UP'})
+            while not self._stop_listen.ready():
+                if self.pubsub.subscribed:
+                    message = self.pubsub.get_message(timeout=0.2)
                     if message:
                         self._update_data(message['data'])
                     else:
@@ -76,10 +91,11 @@ class PubSubResponsesListener(DependencyProvider):
                         continue
 
                 eventlet.sleep(1.0)
-        except Exception as error:
-            logger.exception("PubSub Responses Listener", extra={'state': 'DOWN', 'error': str(error)})
+        except:
+            logger.exception("PubSub Responses Listener has crashed", extra={'state': 'DOWN'})
+            raise
         finally:
-            self._stop_listen = True
+            self._stop_listen.send()
 
     def _update_data(self, raw_data: str) -> bool:
         response_key, deserialized_obj = self.deserializer(raw_data)
@@ -100,19 +116,21 @@ class PubSubResponsesListener(DependencyProvider):
         return data_updated
 
     def stop(self):
-        self.shared_redis.unregister_provider(self)
-        self._stop_listen = True
-        self._pubsub.reset()
-        self._pubsub = None
-        self._redis = None
-        super(PubSubResponsesListener, self).stop()
+        self.shared_redis.stop()
+        self._stop_listen.send()
+        self.pubsub.close()
+        self.pubsub = None
+        self.redis = None
+
+    def is_healthy(self) -> bool:
+        return not self._stop_listen.ready()
 
     def wait_for_response(self, response_key: str, timeout: int, wait_not_exists_key: bool=True):
         logger.debug("Waiting for response", extra={'response_key': response_key})
         message_id = uuid4()
 
         try:
-            self._pubsub.subscribe(response_key)
+            self.pubsub.subscribe(response_key)
             self._responses[message_id] = MessageData(response_key)
 
             if not self._check_key_exists(response_key, wait_not_exists_key):
@@ -124,21 +142,21 @@ class PubSubResponsesListener(DependencyProvider):
             logger.error("Response timeout", extra={'response_key': response_key, 'timeout': timeout})
             raise WaitTimeout("Timeout error")
         finally:
-            self._pubsub.unsubscribe(response_key)
+            self.pubsub.unsubscribe(response_key)
             del self._responses[message_id]
 
     def _check_key_exists(self, response_key, wait_not_exists_key):
-        response_raw = self._redis.get(response_key)
+        response_raw = self.redis.get(response_key)
         if response_raw:
             return self._update_data(response_raw)
 
         if wait_not_exists_key is False:
             raise KeyNotFound("Waiting for not exists key")
 
-    def publish_response(self, channel, message, max_retries=3, retry_timeout_sec=1):
+    def publish_response(self, channel: str, message: str, max_retries: int=3, retry_timeout_sec: int=1):
         retry = 0
         while retry <= max_retries:
-            subscribers = self._redis.publish(channel, message)
+            subscribers = self.redis.publish(channel, message)
             if subscribers:
                 logger.debug('Response delivered successful', extra={
                     'channel': channel, 'retry': retry, 'subscribers': subscribers})
@@ -149,5 +167,18 @@ class PubSubResponsesListener(DependencyProvider):
 
         logger.debug('Response was not delivered', extra={'channel': channel})
 
+
+class PubSubResponsesListener(DependencyProvider):
+
+    def __init__(self, deserializer, event_validation=lambda deserialized_obj: True, uri_key='default', **redis_opts):
+        self.responses_listener = SharedResponsesListener(deserializer, event_validation, uri_key, **redis_opts)
+
+    def setup(self):
+        self.responses_listener.register_provider(self)
+
+    def stop(self):
+        self.responses_listener.unregister_provider(self)
+        super(PubSubResponsesListener, self).stop()
+
     def get_dependency(self, worker_ctx):
-        return self
+        return self.responses_listener

@@ -72,7 +72,7 @@ import json
 from typing import Optional
 
 from nameko.rpc import rpc
-from nameko_redis.pubsub_response_listener import PubSubResponsesListener
+from nameko_redis.pubsub_response_listener import PubSubResponsesListener, IResponsesListener
 
 
 # Must return tuple with response_key and deserialized object 
@@ -94,7 +94,7 @@ def event_validation(deserialized_obj: MyObj):
 # WAIT NOT EXISTS KEY
 class MyService:
 
-    listener = PubSubResponsesListener(message_deserializer)
+    listener = PubSubResponsesListener(message_deserializer)  # type: IResponsesListener
 
     @rpc
     def get(self):
@@ -104,7 +104,8 @@ class MyService:
 # WAIT FOR CHANGE IN VALUE
 class MyService2:
 
-    listener = PubSubResponsesListener(message_deserializer, event_validation=event_validation)
+    listener = PubSubResponsesListener(
+        message_deserializer, event_validation=event_validation)  # type: IResponsesListener
 
     @rpc
     def get(self):
