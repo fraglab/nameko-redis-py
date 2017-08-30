@@ -8,7 +8,7 @@ from redis.client import StrictRedis, PubSub
 from nameko.extensions import DependencyProvider, SharedExtension, ProviderCollector
 from nameko.exceptions import deserialize_to_instance
 
-from nameko_redis.client_providers import SharedRedis
+from nameko_redis.client_providers import SharedRedis, DEFAULT_URI_KEY
 
 __all__ = ['PubSubResponsesListener', 'SharedResponsesListener', 'IResponsesListener',
            'MessageData', 'WaitTimeout', 'KeyNotFound']
@@ -53,19 +53,15 @@ class IResponsesListener:
 
 class SharedResponsesListener(ProviderCollector, SharedExtension, IResponsesListener):
 
-    def __init__(self,
-                 deserializer=lambda raw_data: ('', None),
+    def __init__(self, deserializer,
                  event_validation=lambda deserialized_obj: True,
-                 uri_key='default', **redis_opts):
+                 uri_key=DEFAULT_URI_KEY):
         super(SharedResponsesListener, self).__init__()
 
         self.deserializer = deserializer
         self.event_validation = event_validation
 
-        redis_kwargs = {'retry_on_timeout': True}
-        redis_kwargs.update(redis_opts)
-
-        self.shared_redis = SharedRedis(uri_key, **redis_kwargs)
+        self.shared_redis = SharedRedis(uri_key)
         self.redis = None  # type: StrictRedis
         self.pubsub = None  # type: PubSub
 
@@ -80,7 +76,7 @@ class SharedResponsesListener(ProviderCollector, SharedExtension, IResponsesList
 
     def _listener(self):
         try:
-            logger.debug("PubSub Responses Listener is starting", extra={'state': 'UP'})
+            logger.info("PubSub Responses Listener is starting", extra={'state': 'UP'})
             while not self._stop_listen.ready():
                 if self.pubsub.subscribed:
                     message = self.pubsub.get_message(timeout=0.2)
@@ -170,8 +166,10 @@ class SharedResponsesListener(ProviderCollector, SharedExtension, IResponsesList
 
 class PubSubResponsesListener(DependencyProvider):
 
-    def __init__(self, deserializer, event_validation=lambda deserialized_obj: True, uri_key='default', **redis_opts):
-        self.responses_listener = SharedResponsesListener(deserializer, event_validation, uri_key, **redis_opts)
+    def __init__(self, deserializer,
+                 event_validation=lambda deserialized_obj: True,
+                 uri_key=DEFAULT_URI_KEY):
+        self.responses_listener = SharedResponsesListener(deserializer, event_validation, uri_key)
 
     def setup(self):
         self.responses_listener.register_provider(self)

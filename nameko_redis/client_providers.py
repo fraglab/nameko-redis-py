@@ -4,15 +4,15 @@ from redis import StrictRedis
 
 __all__ = ['SharedRedis', 'Redis']
 
-REDIS_URIS_KEY = 'REDIS_URIS'
+REDIS_CONFIG_KEY = 'REDIS_CONFIG'
+DEFAULT_URI_KEY = 'DEFAULT'
 
 
 class SharedRedis(ProviderCollector, SharedExtension):
 
-    def __init__(self, uri_key='default', **redis_opts):
+    def __init__(self, uri_key=DEFAULT_URI_KEY):
         super(SharedRedis, self).__init__()
         self.uri_key = uri_key
-        self.redis_opts = redis_opts
 
         self._client = None
 
@@ -21,10 +21,15 @@ class SharedRedis(ProviderCollector, SharedExtension):
 
     @property
     def redis_uri(self):
-        return self.container.config[REDIS_URIS_KEY][self.uri_key]
+        return self.container.config[REDIS_CONFIG_KEY][self.uri_key]['url']
+
+    @property
+    def redis_options(self):
+        return self.container.config[REDIS_CONFIG_KEY][self.uri_key].get('options') or {}
 
     def start(self):
-        self._client = StrictRedis.from_url(self.redis_uri, **self.redis_opts)
+        if not self._client:
+            self._client = StrictRedis.from_url(self.redis_uri, **self.redis_options)
 
     def stop(self):
         self._client = None
@@ -32,8 +37,8 @@ class SharedRedis(ProviderCollector, SharedExtension):
 
 class Redis(DependencyProvider):
 
-    def __init__(self, uri_key='default', **redis_opts):
-        self.shared_redis = SharedRedis(uri_key, **redis_opts)
+    def __init__(self, uri_key=DEFAULT_URI_KEY):
+        self.shared_redis = SharedRedis(uri_key)
 
     def setup(self):
         self.shared_redis.register_provider(self)

@@ -28,7 +28,7 @@ from nameko_redis import Redis, SharedRedis
 class MyService:
     name = "my_service"
 
-    redis = Redis('default')  # type: StrictRedis
+    redis = Redis()  # type: StrictRedis
 
     @rpc
     def get_data(self, key):
@@ -37,7 +37,7 @@ class MyService:
     
 class MyDependencyProvider(DependencyProvider):
 
-    shared_redis = SharedRedis('default')
+    shared_redis = SharedRedis()
     redis = None
     
     def setup(self):
@@ -119,15 +119,18 @@ class MyService2:
 Nameko configuration example:
 
 ```
-REDIS_URIS:
- default: 'redis://localhost:6379/0'
- dev: 'redis://localhost:6379/1'
+REDIS_CONFIG:
+  DEFAULT:
+    url: 'redis://localhost:6379/0'
+    options:
+      retry_on_timeout: True
+      decode_responses: True
 ```
 
 
 Redis, SharedRedis arguments:
-* **uri_key** - specify configuration redis key, like "default"
-* ****redis_opts** - specify any StrictRedis optional arguments, like encoding, retry_on_timeout, etc.
+* **url** - specify configuration redis key, like "DEFAULT"
+* ****options** - specify any StrictRedis optional arguments, like encoding, retry_on_timeout, etc.
 
 
 ```python
@@ -136,5 +139,5 @@ from nameko_redis import Redis
 class MyService:
     name = "my_service"
 
-    redis = Redis('default', retry_on_timeout=True, encoding='utf-8')  # type: StrictRedis
+    redis = Redis()  # type: StrictRedis
 ```
