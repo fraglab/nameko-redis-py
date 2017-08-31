@@ -4,7 +4,7 @@ from redis import StrictRedis
 
 __all__ = ['SharedRedis', 'Redis']
 
-REDIS_CONFIG_KEY = 'REDIS_CONFIG'
+REDIS_CONFIG_KEY = 'REDIS'
 DEFAULT_URI_KEY = 'DEFAULT'
 
 

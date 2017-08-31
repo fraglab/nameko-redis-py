@@ -119,7 +119,7 @@ class MyService2:
 Nameko configuration example:
 
 ```
-REDIS_CONFIG:
+REDIS:
   DEFAULT:
     url: 'redis://localhost:6379/0'
     options:
