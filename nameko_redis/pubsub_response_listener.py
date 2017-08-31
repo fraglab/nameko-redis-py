@@ -66,7 +66,7 @@ class SharedResponsesListener(ProviderCollector, SharedExtension, IResponsesList
         self.pubsub = None  # type: PubSub
 
         self._responses = {}  # type: Dict[MessageID, MessageData]
-        self._stop_listen = Event()
+        self._stop_listen = False
 
     def start(self):
         self.shared_redis.start()
@@ -77,7 +77,7 @@ class SharedResponsesListener(ProviderCollector, SharedExtension, IResponsesList
     def _listener(self):
         try:
             logger.info("PubSub Responses Listener is starting", extra={'state': 'UP'})
-            while not self._stop_listen.ready():
+            while not self._stop_listen:
                 if self.pubsub.subscribed:
                     message = self.pubsub.get_message(timeout=0.2)
                     if message:
@@ -91,7 +91,7 @@ class SharedResponsesListener(ProviderCollector, SharedExtension, IResponsesList
             logger.exception("PubSub Responses Listener has crashed", extra={'state': 'DOWN'})
             raise
         finally:
-            self._stop_listen.send()
+            self._stop_listen = True
 
     def _update_data(self, raw_data: str) -> bool:
         response_key, deserialized_obj = self.deserializer(raw_data)
@@ -113,13 +113,13 @@ class SharedResponsesListener(ProviderCollector, SharedExtension, IResponsesList
 
     def stop(self):
         self.shared_redis.stop()
-        self._stop_listen.send()
+        self._stop_listen = True
         self.pubsub.close()
         self.pubsub = None
         self.redis = None
 
     def is_healthy(self) -> bool:
-        return not self._stop_listen.ready()
+        return not self._stop_listen
 
     def wait_for_response(self, response_key: str, timeout: int, wait_not_exists_key: bool=True):
         logger.debug("Waiting for response", extra={'response_key': response_key})
