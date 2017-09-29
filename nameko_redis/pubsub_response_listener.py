@@ -103,13 +103,21 @@ class SharedResponsesListener(ProviderCollector, SharedExtension, IResponsesList
 
                 log_extra = dict(response_key=response_key, message_data=vars(deserialized_obj))
                 if self.event_validation(deserialized_obj):
-                    logger.debug('Message event was sent', extra=log_extra)
-                    message.event.send()
+                    logger.debug('Data updated and event was triggered', extra=log_extra)
+                    self._send_event(message)
                     data_updated = True
                 else:
-                    logger.debug('Update message data', extra=log_extra)
+                    logger.debug('Data updated', extra=log_extra)
 
         return data_updated
+
+    @staticmethod
+    def _send_event(message: MessageData):
+        try:
+            message.event.send()
+        except AssertionError:
+            # SKIP: AssertionError: Trying to re-send() an already-triggered event.
+            pass
 
     def stop(self):
         self.shared_redis.stop()
@@ -135,7 +143,7 @@ class SharedResponsesListener(ProviderCollector, SharedExtension, IResponsesList
 
             return self._responses[message_id].data
         except (eventlet.TimeoutError, eventlet.Timeout):
-            logger.error("Response timeout", extra={'response_key': response_key, 'timeout': timeout})
+            logger.info("Response timeout", extra={'response_key': response_key, 'timeout': timeout})
             raise WaitTimeout("Timeout error")
         finally:
             self.pubsub.unsubscribe(response_key)
